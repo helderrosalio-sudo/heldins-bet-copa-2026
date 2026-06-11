@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { HERO_IMAGE_URL } from './HeroComponents';
+import heroImageLocal from '../assets/images/hero_image_local.png';
 
 interface SplashProps {
   onComplete: () => void;
@@ -71,7 +71,7 @@ export default function Splash({ onComplete }: SplashProps) {
             
             {/* Extremely soft, continuous image scale simulating a high-end cinematic opening */}
             <motion.img 
-              src={HERO_IMAGE_URL} 
+              src={heroImageLocal} 
               alt="Heldin's Bet 2026 Official Logo Asset" 
               initial={{ scale: 1.15, opacity: 0 }}
               animate={{ scale: 1.02, opacity: 0.95 }}

@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Profile } from '../types';
 import { HeroContainer, HeroImage, HeroOverlay } from './HeroComponents';
+import heroImageLocal from '../assets/images/hero_image_local.png';
 
 interface PosterScreenProps {
   onLoginSuccess: () => void;
@@ -66,7 +67,7 @@ export default function PosterScreen({ onLoginSuccess }: PosterScreenProps) {
           className="relative w-full"
         >
           <HeroContainer>
-            <HeroImage alt="Heldin's Bet 2026 Official Poster Image" />
+            <HeroImage src={heroImageLocal} alt="Heldin's Bet 2026 Official Poster Image" />
             <HeroOverlay />
             
             {/* Corner Badges */}

@@ -207,7 +207,7 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
 
   // Sharing helpers
   const handleShareWhatsApp = (poolNome: string, code: string) => {
-    const mensagem = `🏆 Você foi convidado para participar do bolão:\n\n${poolNome}\n\nCódigo do Convite:\n${code}\n\nEntre no Heldin's Bet e participe da Copa do Mundo 2026 conosco!\n\n⚽🌎`;
+    const mensagem = `🏆 Você foi convidado para participar do bolão:\n\n${poolNome}\n\nCódigo do Convite:\n${code}\n\nEntre no Heldin's Bet e participe da Copa do Mundo 2026 conosco!\n\nAcesse:\nhttps://heldins-bet-copa-2026.vercel.app\n\n⚽🌎`;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
     const baseUrl = isMobile ? 'https://wa.me/?text=' : 'https://web.whatsapp.com/send?text=';
     const finalUrl = `${baseUrl}${encodeURIComponent(mensagem)}`;
