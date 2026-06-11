@@ -1,10 +1,9 @@
 import React from 'react';
-import heroImageLocal from '../assets/images/hero_image_local.png';
 
 // Central source of truth for the primary branding/owner artwork of Heldin's Bet.
 // Future replacements in transparent PNG, WebP, or high-definition JPG formats can
 // be applied directly to this single constant without needing to alter any application code.
-export const HERO_IMAGE_URL = heroImageLocal;
+export const HERO_IMAGE_URL = '/hero-official.png';
 
 interface HeroContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -44,7 +43,7 @@ interface HeroImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
  */
 export const HeroImage: React.FC<HeroImageProps> = ({ 
   src = HERO_IMAGE_URL, 
-  alt = "Heldin's Bet 2026 Official Hero Art", 
+  alt = "Heldin's Bet Official Hero", 
   className = "",
   ...props 
 }) => {
@@ -52,7 +51,7 @@ export const HeroImage: React.FC<HeroImageProps> = ({
     <img 
       src={src} 
       alt={alt} 
-      className={`w-full h-full object-cover object-center pointer-events-none select-none transition-all duration-300 ${className}`} 
+      className={`w-full h-full object-contain object-center pointer-events-none select-none transition-all duration-300 ${className}`} 
       referrerPolicy="no-referrer"
       {...props}
     />

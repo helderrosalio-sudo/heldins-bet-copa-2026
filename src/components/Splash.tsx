@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import heroImageLocal from '../assets/images/hero_image_local.png';
 
 interface SplashProps {
   onComplete: () => void;
@@ -71,12 +70,12 @@ export default function Splash({ onComplete }: SplashProps) {
             
             {/* Extremely soft, continuous image scale simulating a high-end cinematic opening */}
             <motion.img 
-              src={heroImageLocal} 
-              alt="Heldin's Bet 2026 Official Logo Asset" 
+              src="/hero-official.png" 
+              alt="Heldin's Bet Official Hero" 
               initial={{ scale: 1.15, opacity: 0 }}
               animate={{ scale: 1.02, opacity: 0.95 }}
               transition={{ duration: 3, ease: "easeOut" }}
-              className="w-full h-full object-cover object-center"
+              className="w-full h-full object-contain object-center"
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#050c07]/90 via-[#050c07]/45 to-[#050c07]/10" />
