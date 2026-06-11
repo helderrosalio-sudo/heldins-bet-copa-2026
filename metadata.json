@@ -1,0 +1,6 @@
+{
+  "name": "Heldin's Bet",
+  "description": "Aplicativo oficial de palpites para a Copa do Mundo 2026, integrado de forma segura ao backend oficial da Supabase e auxiliado pela inteligência artificial de palpites do Google Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
