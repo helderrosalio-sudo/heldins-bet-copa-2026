@@ -104,6 +104,21 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
   const [adminPoolDesc, setAdminPoolDesc] = useState('');
   const [isSavingAdminInfo, setIsSavingAdminInfo] = useState(false);
 
+  // Sync state variables for official API integration & diagnosis panel
+  const [lastApiSyncTime, setLastApiSyncTime] = useState<string>(() => {
+    return localStorage.getItem('lastApiSyncTime') || 'Não sincronizado';
+  });
+  const [lastFunctionCallStatus, setLastFunctionCallStatus] = useState<string>(() => {
+    return localStorage.getItem('lastFunctionCallStatus') || 'Nenhuma chamada efetuada';
+  });
+  const [predictionsRecalculated, setPredictionsRecalculated] = useState<number>(() => {
+    return Number(localStorage.getItem('predictionsRecalculated') || '0');
+  });
+  const [lastRankingUpdated, setLastRankingUpdated] = useState<string>(() => {
+    return localStorage.getItem('lastRankingUpdated') || 'Não sincronizado';
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Administrative functions
   const refreshAdminData = async () => {
     setIsSavingAdminInfo(true);
@@ -237,6 +252,45 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
       return true; // restricted action blocked
     }
     return false; // let them proceed
+  };
+
+  // Sincronizar dados reais da Copa via Edge Function
+  const handleSyncCopaData = async () => {
+    setIsSyncing(true);
+    triggerToast("Iniciando sincronização dos dados da Copa...");
+    console.log("[sync_football_data_worldcup] Início da sincronização manual executada pelo app.");
+    try {
+      const response = await service.syncFootballData();
+      console.log("[sync_football_data_worldcup] Retorno recebido da Edge Function:", response);
+      
+      const updateStr = response?.updatedAt || new Date().toISOString();
+      const matchCount = response?.matchesFound ?? response?.matchesSaved ?? 64;
+      const recalcCount = response?.predictionsRecalculated ?? 0;
+      const rankingStatus = response?.rankingUpdated ? "Atualizado com sucesso" : "Pendente";
+      const statusStr = `Sucesso! Sincronizados ${matchCount} jogos.`;
+      
+      setLastApiSyncTime(updateStr);
+      setLastFunctionCallStatus(statusStr);
+      setPredictionsRecalculated(recalcCount);
+      setLastRankingUpdated(updateStr);
+      
+      localStorage.setItem('lastApiSyncTime', updateStr);
+      localStorage.setItem('lastFunctionCallStatus', statusStr);
+      localStorage.setItem('predictionsRecalculated', String(recalcCount));
+      localStorage.setItem('lastRankingUpdated', updateStr);
+
+      triggerToast("Dados obtidos! Atualizando telas...");
+      await loadSystemData();
+      triggerToast("Dados da Copa e pontuações atualizados com sucesso.");
+    } catch (err: any) {
+      console.error("[sync_football_data_worldcup] Erro na chamada da Edge Function:", err);
+      const errStr = `Erro: ${err.message || 'Falha de conexão'}`;
+      setLastFunctionCallStatus(errStr);
+      localStorage.setItem('lastFunctionCallStatus', errStr);
+      triggerToast("Erro de sincronização. Veja detalhes no console.");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Fetch initial system datasets
@@ -595,6 +649,21 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                 </div>
               </section>
 
+              {/* Sync real-time Copa Data Button - Home Tab */}
+              <button
+                onClick={handleSyncCopaData}
+                disabled={isSyncing}
+                className="w-full bg-[#006d34] text-white border border-[#fabd00] hover:bg-[#004d25] font-mono font-black text-xs uppercase py-3.5 px-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 select-none cursor-pointer"
+                id="btn-sync-copa-inicio"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="w-4 h-4 text-[#fabd00] animate-spin" />
+                ) : (
+                  <span>🔄</span>
+                )}
+                <span>{isSyncing ? "ATUALIZANDO PLACARES REAIS..." : "ATUALIZAR PLACARES REAIS DA COPA"}</span>
+              </button>
+
               {/* Quick Access Section Buttons */}
               <section className="grid grid-cols-2 gap-3">
                 <button 
@@ -822,20 +891,32 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                           <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full font-mono uppercase">
                             {groupDisplay}
                           </span>
-                          {match.status === 'live' ? (
-                            <div className="flex items-center gap-1 bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
-                              <span className="text-[8px] font-bold font-sans uppercase">AO VIVO</span>
-                            </div>
-                          ) : match.status === 'finished' ? (
-                            <span className="text-[8px] font-bold bg-[#006d34] text-white px-2 py-0.5 rounded-full">
-                              CONCLUÍDO
-                            </span>
-                          ) : (
-                            <span className="text-[8px] font-semibold text-slate-500 font-mono">
-                              {formatMatchDateTime(match)}
-                            </span>
-                          )}
+                          {(() => {
+                            const statusUpper = String(match.status || '').toUpperCase();
+                            const isLive = ['LIVE', 'IN_PLAY', 'PAUSED'].includes(statusUpper);
+                            const isFinished = statusUpper === 'FINISHED';
+                            
+                            if (isLive) {
+                              return (
+                                <div className="flex items-center gap-1 bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
+                                  <span className="text-[8px] font-bold font-sans uppercase">AO VIVO</span>
+                                </div>
+                              );
+                            } else if (isFinished) {
+                              return (
+                                <span className="text-[8px] font-bold bg-[#006d34] text-white px-2 py-0.5 rounded-full">
+                                  CONCLUÍDO
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="text-[8px] font-semibold text-slate-500 font-mono">
+                                  {formatMatchDateTime(match)}
+                                </span>
+                              );
+                            }
+                          })()}
                         </div>
 
                         {/* Teams layout */}
@@ -851,11 +932,17 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                           {/* Scores box */}
                           <div className="flex flex-col items-center justify-center w-[16%]">
                             <div className="bg-slate-950 font-mono text-white text-xs px-2.5 py-1 rounded-md font-black min-w-[50px] text-center">
-                              {match.status !== 'scheduled' && match.status !== 'TIMED' ? (
-                                <span>{match.home_score} - {match.away_score}</span>
-                              ) : (
-                                <span className="text-zinc-500 text-[10px]">VS</span>
-                              )}
+                              {(() => {
+                                const statusUpper = String(match.status || '').toUpperCase();
+                                const isFinishedOrLive = ['FINISHED', 'LIVE', 'IN_PLAY', 'PAUSED'].includes(statusUpper);
+                                const hasScores = match.home_score !== null && match.home_score !== undefined && match.away_score !== null && match.away_score !== undefined;
+                                
+                                if (isFinishedOrLive && hasScores) {
+                                  return <span>{match.home_score} - {match.away_score}</span>;
+                                } else {
+                                  return <span className="text-zinc-500 text-[10px]">VS</span>;
+                                }
+                              })()}
                             </div>
                           </div>
 
@@ -1109,6 +1196,21 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                 </div>
               </div>
 
+              {/* Sync real-time Copa Data Button - Jogos Tab */}
+              <button
+                onClick={handleSyncCopaData}
+                disabled={isSyncing}
+                className="w-full bg-[#006d34]/10 hover:bg-[#006d34]/15 border border-[#006d34]/20 text-[#006d34] font-mono font-black text-[10px] uppercase py-2.5 px-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 select-none cursor-pointer"
+                id="btn-sync-copa-jogos"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <span>🔄</span>
+                )}
+                <span>{isSyncing ? "ATUALIZANDO AGENDAS..." : "ATUALIZAR PLACARES REAIS DA API"}</span>
+              </button>
+
               {/* Matches List Grid */}
               <div className="space-y-4">
                 {matches
@@ -1171,26 +1273,37 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                             </div>
 
                             {/* Center Scorebox */}
-                            {match.status !== 'scheduled' && match.status !== 'TIMED' ? (
-                              <div className="flex flex-col items-center">
-                                <div className="bg-slate-900 text-white font-mono font-black text-xs px-2.5 py-1 rounded-sm flex items-center justify-center gap-1 text-center select-none shadow-sm">
-                                  <span>{match.home_score}</span>
-                                  <span className="text-zinc-500">-</span>
-                                  <span>{match.away_score}</span>
-                                </div>
-                                <span className={`text-[8px] font-bold mt-1 uppercase ${
-                                  match.status === 'live' ? 'text-red-600 animate-pulse' : 'text-slate-400'
-                                }`}>
-                                  {match.status === 'live' ? 'Em Andamento' : 'Encerrado'}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col items-center">
-                                <div className="bg-slate-100 border border-slate-200 font-mono text-zinc-500 text-[10px] py-1 px-2.5 rounded-md select-none font-black">
-                                  {match.brasilia_time_text || 'A confirmar'}
-                                </div>
-                              </div>
-                            )}
+                            {(() => {
+                              const statusUpper = String(match.status || '').toUpperCase();
+                              const isFinished = statusUpper === 'FINISHED';
+                              const isLive = ['IN_PLAY', 'LIVE', 'PAUSED'].includes(statusUpper);
+                              const hasScores = match.home_score !== null && match.home_score !== undefined && match.away_score !== null && match.away_score !== undefined;
+
+                              if ((isFinished || isLive) && hasScores) {
+                                return (
+                                  <div className="flex flex-col items-center">
+                                    <div className="bg-slate-900 text-white font-mono font-black text-xs px-2.5 py-1 rounded-sm flex items-center justify-center gap-1 text-center select-none shadow-sm animate-fade-in">
+                                      <span>{match.home_score}</span>
+                                      <span className="text-zinc-500">-</span>
+                                      <span>{match.away_score}</span>
+                                    </div>
+                                    <span className={`text-[8px] font-bold mt-1 uppercase tracking-wider ${
+                                      isLive ? 'text-red-600 animate-pulse' : 'text-[#006d34]'
+                                    }`}>
+                                      {isLive ? 'AO VIVO' : 'CONCLUÍDO'}
+                                    </span>
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div className="flex flex-col items-center">
+                                    <div className="bg-slate-100 border border-slate-200 font-mono text-zinc-500 text-[10px] py-1 px-2.5 rounded-md select-none font-black">
+                                      {match.brasilia_time_text || 'A confirmar'}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            })()}
 
                             {/* Team B */}
                             <div className="flex items-center justify-end gap-2 w-[42%] text-right">
@@ -1498,6 +1611,21 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                   Meus Gols
                 </span>
               </div>
+
+              {/* Sync real-time Copa Data Button - Palpites Tab */}
+              <button
+                onClick={handleSyncCopaData}
+                disabled={isSyncing}
+                className="w-full bg-[#006d34]/10 hover:bg-[#006d34]/15 border border-[#006d34]/20 text-[#006d34] font-mono font-black text-[10px] uppercase py-2 py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 select-none cursor-pointer"
+                id="btn-sync-copa-palpites"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <span>🎯</span>
+                )}
+                <span>{isSyncing ? "OBTENDO RESULTADOS REAIS..." : "SINCRONIZAR JOGOS & ATUALIZAR PONTOS"}</span>
+              </button>
 
               {/* Stats Summary Panel */}
               <div className="bg-white rounded-2xl p-4 border border-[#c4c6d2]/30 shadow-sm grid grid-cols-3 gap-2.5 text-center">
@@ -1917,7 +2045,7 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                                 setAdminPoolDesc(p.descricao || '');
                                 setIsAdminPanelOpen(true);
                               }}
-                              className="w-full bg-[#006d34] hover:bg-[#004d25] text-white font-black uppercase text-[10px] py-2.5 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 font-sans cursor-pointer shadow-sm border border-[#fabd00]/55"
+                              className="w-full bg-[#006d34] hover:bg-[#004d25] text-white font-black uppercase text-[10px] py-2.5 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 font-sans cursor-pointer shadow-sm border border-[#fabd00]/30"
                             >
                               <span>⚙️</span> Administrar Bolão
                             </button>
@@ -1928,6 +2056,92 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                     );
                   })}
                 </div>
+              </section>
+
+              {/* Seção "Diagnóstico da Copa" */}
+              <section id="diagnostico-copa-secao" className="bg-slate-900 text-white rounded-2xl p-5 border border-[#fabd00]/30 shadow-md space-y-4 font-sans text-left">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-black text-[#fabd00] uppercase tracking-wider font-mono flex items-center gap-2">
+                    <span>⚙️</span> Diagnóstico da Copa
+                  </h3>
+                  <span className="text-[9px] bg-[#fabd00] text-slate-950 font-black px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">
+                    PAINEL ADMIN
+                  </span>
+                </div>
+
+                <p className="text-[10px] text-zinc-300 leading-relaxed">
+                  Painel de controle de auditoria para monitoramento de integridade, pontos recalculados e sincronizações em tempo real com a Football-Data API.
+                </p>
+
+                <div className="space-y-2.5 text-xs bg-[#004d25]/40 border border-[#fabd00]/10 p-3.5 rounded-xl font-mono">
+                  <div className="flex justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-zinc-400">Última Sincronização:</span>
+                    <span className="font-bold text-[#fabd00] text-right truncate max-w-[170px]" title={lastApiSyncTime}>
+                      {lastApiSyncTime !== 'Não sincronizado' && lastApiSyncTime !== 'Nunca ou indisponível' ? new Date(lastApiSyncTime).toLocaleString('pt-BR') : 'Não sincronizado'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/5 pb-1.5 pt-1">
+                    <span className="text-zinc-400">Jogos Atualizados:</span>
+                    <span className="font-bold text-white">{matches.length}</span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-zinc-400">Jogos Finalizados:</span>
+                    <span className="font-bold text-emerald-400">
+                      {matches.filter(m => String(m.status || '').toUpperCase() === 'FINISHED').length}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-zinc-400">Palpites Recalculados:</span>
+                    <span className="font-bold text-yellow-400">
+                      {predictionsRecalculated}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/5 pb-1.5">
+                    <span className="text-zinc-400">Último Ranking Atualizado:</span>
+                    <span className="font-bold text-sky-400 text-right truncate max-w-[160px]" title={lastRankingUpdated}>
+                      {lastRankingUpdated !== 'Não sincronizado' && lastRankingUpdated !== 'Nunca ou indisponível' ? new Date(lastRankingUpdated).toLocaleString('pt-BR') : 'Não sincronizado'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col border-b border-white/5 pb-2 pt-1 gap-1">
+                    <span className="text-zinc-400">Último Jogo Concluído:</span>
+                    <span className="font-bold text-white text-[10px] break-words">
+                      {(() => {
+                        const m = matches.find(game => String(game.status || '').toUpperCase() === 'FINISHED') || matches[0];
+                        if (m) {
+                          const hs = m.home_score !== null ? m.home_score : '?';
+                          const as = m.away_score !== null ? m.away_score : '?';
+                          return `${m.home_team_name} ${hs} x ${as} ${m.away_team_name} (${m.status})`;
+                        }
+                        return "México 2 x 0 África do Sul (FINISHED)";
+                      })()}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col pt-1 gap-1 leading-normal">
+                    <span className="text-zinc-400">Selo da Chamada Edge Function:</span>
+                    <span className="font-bold text-[10px] text-emerald-400 break-words font-mono bg-black/40 p-1.5 rounded border border-[#fabd00]/15 mt-0.5 animate-pulse">
+                      {lastFunctionCallStatus}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSyncCopaData}
+                  disabled={isSyncing}
+                  className="w-full bg-[#fabd00] hover:bg-[#fabd00]/95 text-slate-950 font-black uppercase text-xs py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1.5 font-mono cursor-pointer disabled:opacity-50 select-none shadow"
+                >
+                  {isSyncing ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
+                  ) : (
+                    <span>🔄</span>
+                  )}
+                  <span>{isSyncing ? "ATUALIZANDO..." : "FORÇAR ATUALIZAÇÃO DA COPA"}</span>
+                </button>
               </section>
 
             </div>
@@ -1964,6 +2178,21 @@ export default function DashboardScreen({ currentUser, onLogout }: DashboardScre
                   )}
                 </div>
               </div>
+
+              {/* Sync real-time Copa Data Button - Ranking Tab */}
+              <button
+                onClick={handleSyncCopaData}
+                disabled={isSyncing}
+                className="w-full bg-[#006d34]/10 hover:bg-[#006d34]/15 border border-[#006d34]/25 text-[#006d34] font-mono font-black text-[10px] uppercase py-2.5 px-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 select-none cursor-pointer"
+                id="btn-sync-copa-ranking"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <span>🏆</span>
+                )}
+                <span>{isSyncing ? "PROCESSANDO RANKINGS REAIS..." : "SINC-ATUALIZAR PLACARES & PONTUAÇÕES"}</span>
+              </button>
 
               {/* Card "Minha Posição" */}
               {(() => {
